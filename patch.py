@@ -2,21 +2,22 @@ import os
 import re
 import sys
 
+NL = chr(10)
+
 def patch_file(filepath):
     with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
         content = f.read()
 
     original = content
 
-    # 1. Universal Build.MANUFACTURER & Build.BRAND bypass to "samsung"
+    # 1. Manufacturer & Brand bypass
     if "Landroid/os/Build;->MANUFACTURER:Ljava/lang/String;" in content:
         lines = content.splitlines()
         for i, line in enumerate(lines):
             if "sget-object" in line and "Landroid/os/Build;->MANUFACTURER:Ljava/lang/String;" in line:
                 reg = line.strip().split()[1].replace(',', '')
                 lines[i] = f'    const-string {reg}, "samsung"'
-        content = "
-".join(lines)
+        content = NL.join(lines)
 
     if "Landroid/os/Build;->BRAND:Ljava/lang/String;" in content:
         lines = content.splitlines()
@@ -24,8 +25,7 @@ def patch_file(filepath):
             if "sget-object" in line and "Landroid/os/Build;->BRAND:Ljava/lang/String;" in line:
                 reg = line.strip().split()[1].replace(',', '')
                 lines[i] = f'    const-string {reg}, "samsung"'
-        content = "
-".join(lines)
+        content = NL.join(lines)
 
     # 2. Neutralize root binary, test-keys, and su strings
     content = content.replace('"test-keys"', '"release-keys"')
@@ -35,33 +35,37 @@ def patch_file(filepath):
     content = content.replace('"/system/app/Superuser.apk"', '"/system/app/none"')
     content = content.replace('"su"', '"no_su"')
 
-    # 3. Completely replace method bodies for RootingCheckUtil / root checking classes
+    # 3. Completely replace method bodies for root checking classes
     if "RootingCheckUtil" in content or "checkSuExists" in content or "checkRootingPackage" in content or "checkForBinary" in content or "common_rooting_desc" in content:
         content = re.sub(
-            r'(.method\s+[^{}\n]+?\([^{}\n]*?\)\s*Z)[\s\S]*?\.end method',
-            r'\1\n    .registers 2\n    const/4 v0, 0x0\n    return v0\n.end method',
-            content
+            r'(\.method\s+.*?\(.*?\)Z).*?\.end method',
+            r'\1' + NL + '    .registers 2' + NL + '    const/4 v0, 0x0' + NL + '    return v0' + NL + '.end method',
+            content,
+            flags=re.DOTALL
         )
 
     # 4. Completely replace PackageValidator methods to return true (0x1)
     if "PackageValidator" in content or "9741A0F330DC2E8619B76A2597F308C37DBE30A2" in content:
         content = re.sub(
-            r'(.method\s+[^{}\n]+?\([^{}\n]*?\)\s*Z)[\s\S]*?\.end method',
-            r'\1\n    .registers 2\n    const/4 v0, 0x1\n    return v0\n.end method',
-            content
+            r'(\.method\s+.*?\(.*?\)Z).*?\.end method',
+            r'\1' + NL + '    .registers 2' + NL + '    const/4 v0, 0x1' + NL + '    return v0' + NL + '.end method',
+            content,
+            flags=re.DOTALL
         )
 
-    # 5. Disable RootingDetectedDialog completely so it can never pop up
+    # 5. Disable RootingDetectedDialog completely
     if "RootingDetectedDialog" in content or "common_rooting_title" in content or "common_rooting_desc" in content:
         content = re.sub(
-            r'(.method\s+[^{}\n]+?onCreateDialog\([^{}\n]*?\)[^{}\n]+?)[\s\S]*?\.end method',
-            r'\1\n    .registers 2\n    const/4 v0, 0x0\n    return-object v0\n.end method',
-            content
+            r'(\.method\s+.*?onCreateDialog\(.*?\).*?).*?\.end method',
+            r'\1' + NL + '    .registers 2' + NL + '    const/4 v0, 0x0' + NL + '    return-object v0' + NL + '.end method',
+            content,
+            flags=re.DOTALL
         )
         content = re.sub(
-            r'(.method\s+[^{}\n]+?show\([^{}\n]*?\)\s*V)[\s\S]*?\.end method',
-            r'\1\n    .registers 2\n    return-void\n.end method',
-            content
+            r'(\.method\s+.*?show\(.*?\)\s*V).*?\.end method',
+            r'\1' + NL + '    .registers 2' + NL + '    return-void' + NL + '.end method',
+            content,
+            flags=re.DOTALL
         )
 
     if content != original:
