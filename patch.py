@@ -10,8 +10,9 @@ def patch_smali_methods(content):
     is_root_util = any(k in content for k in ['RootingCheckUtil', 'checkSuExists', 'checkRootingPackage'])
     is_validator = 'PackageValidator' in content
     is_dialog = 'RootingDetectedDialog' in content
+    is_restriction = any(k in content for k in ['RestrictionView', 'isSupportedCountry', 'isSupportCountry', 'common_restriction'])
 
-    if not (is_root_util or is_validator or is_dialog):
+    if not (is_root_util or is_validator or is_dialog or is_restriction):
         return content
 
     methods = content.split('\n.method ')
@@ -28,12 +29,27 @@ def patch_smali_methods(content):
                 regs = line
                 break
 
+        # 1. Root & Security checks: always false
         if is_root_util and header.strip().endswith(')Z'):
             new_m = header + NL + regs + NL + '    const/4 v0, 0x0' + NL + '    return v0' + NL + '.end method'
             res.append(new_m)
+        # 2. Package validation: always true
         elif is_validator and header.strip().endswith(')Z'):
             new_m = header + NL + regs + NL + '    const/4 v0, 0x1' + NL + '    return v0' + NL + '.end method'
             res.append(new_m)
+        # 3. Country support: always true
+        elif any(k in header for k in ['isSupportCountry', 'isSupportedCountry', 'isCountrySupported', 'isEligible']) and header.strip().endswith(')Z'):
+            new_m = header + NL + regs + NL + '    const/4 v0, 0x1' + NL + '    return v0' + NL + '.end method'
+            res.append(new_m)
+        # 4. Restriction check: always false
+        elif any(k in header for k in ['isRestricted', 'isRestriction', 'checkRestriction']) and header.strip().endswith(')Z'):
+            new_m = header + NL + regs + NL + '    const/4 v0, 0x0' + NL + '    return v0' + NL + '.end method'
+            res.append(new_m)
+        # 5. Country ISO / Code getters: return "US"
+        elif any(k in header for k in ['getNetworkCountryIso', 'getSimCountryIso', 'getCountryCode']) and header.strip().endswith(')Ljava/lang/String;'):
+            new_m = header + NL + regs + NL + '    const-string v0, "US"' + NL + '    return-object v0' + NL + '.end method'
+            res.append(new_m)
+        # 6. Disable dialog popups
         elif is_dialog:
             if header.strip().endswith(')V'):
                 new_m = header + NL + regs + NL + '    return-void' + NL + '.end method'
