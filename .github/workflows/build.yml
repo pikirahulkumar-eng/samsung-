@@ -1,7 +1,10 @@
-name: Patch Samsung Health Monitor
+﻿name: Patch Samsung Health Monitor
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
   patch:
