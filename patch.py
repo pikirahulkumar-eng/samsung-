@@ -1,8 +1,52 @@
 import os
-import re
 import sys
 
 NL = chr(10)
+
+def patch_smali_methods(content):
+    if '\n.method ' not in content:
+        return content
+
+    is_root_util = any(k in content for k in ['RootingCheckUtil', 'checkSuExists', 'checkRootingPackage'])
+    is_validator = 'PackageValidator' in content
+    is_dialog = 'RootingDetectedDialog' in content
+
+    if not (is_root_util or is_validator or is_dialog):
+        return content
+
+    methods = content.split('\n.method ')
+    res = [methods[0]]
+    for m in methods[1:]:
+        if '\n' not in m:
+            res.append(m)
+            continue
+        header, body = m.split('\n', 1)
+        regs = '    .registers 2'
+        for line in body.splitlines():
+            s = line.strip()
+            if s.startswith('.registers') or s.startswith('.locals'):
+                regs = line
+                break
+
+        if is_root_util and header.strip().endswith(')Z'):
+            new_m = header + NL + regs + NL + '    const/4 v0, 0x0' + NL + '    return v0' + NL + '.end method'
+            res.append(new_m)
+        elif is_validator and header.strip().endswith(')Z'):
+            new_m = header + NL + regs + NL + '    const/4 v0, 0x1' + NL + '    return v0' + NL + '.end method'
+            res.append(new_m)
+        elif is_dialog:
+            if header.strip().endswith(')V'):
+                new_m = header + NL + regs + NL + '    return-void' + NL + '.end method'
+                res.append(new_m)
+            elif 'onCreateDialog' in header:
+                new_m = header + NL + regs + NL + '    const/4 v0, 0x0' + NL + '    return-object v0' + NL + '.end method'
+                res.append(new_m)
+            else:
+                res.append(m)
+        else:
+            res.append(m)
+
+    return '\n.method '.join(res)
 
 def patch_file(filepath):
     with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
@@ -35,38 +79,8 @@ def patch_file(filepath):
     content = content.replace('"/system/app/Superuser.apk"', '"/system/app/none"')
     content = content.replace('"su"', '"no_su"')
 
-    # 3. Completely replace method bodies for root checking classes
-    if "RootingCheckUtil" in content or "checkSuExists" in content or "checkRootingPackage" in content or "checkForBinary" in content or "common_rooting_desc" in content:
-        content = re.sub(
-            r'(\.method\s+.*?\(.*?\)Z).*?\.end method',
-            r'\1' + NL + '    .registers 2' + NL + '    const/4 v0, 0x0' + NL + '    return v0' + NL + '.end method',
-            content,
-            flags=re.DOTALL
-        )
-
-    # 4. Completely replace PackageValidator methods to return true (0x1)
-    if "PackageValidator" in content or "9741A0F330DC2E8619B76A2597F308C37DBE30A2" in content:
-        content = re.sub(
-            r'(\.method\s+.*?\(.*?\)Z).*?\.end method',
-            r'\1' + NL + '    .registers 2' + NL + '    const/4 v0, 0x1' + NL + '    return v0' + NL + '.end method',
-            content,
-            flags=re.DOTALL
-        )
-
-    # 5. Disable RootingDetectedDialog completely
-    if "RootingDetectedDialog" in content or "common_rooting_title" in content or "common_rooting_desc" in content:
-        content = re.sub(
-            r'(\.method\s+.*?onCreateDialog\(.*?\).*?).*?\.end method',
-            r'\1' + NL + '    .registers 2' + NL + '    const/4 v0, 0x0' + NL + '    return-object v0' + NL + '.end method',
-            content,
-            flags=re.DOTALL
-        )
-        content = re.sub(
-            r'(\.method\s+.*?show\(.*?\)\s*V).*?\.end method',
-            r'\1' + NL + '    .registers 2' + NL + '    return-void' + NL + '.end method',
-            content,
-            flags=re.DOTALL
-        )
+    # 3. Clean method body replacement
+    content = patch_smali_methods(content)
 
     if content != original:
         with open(filepath, 'w', encoding='utf-8') as f:
