@@ -1,0 +1,59 @@
+name: Patch Samsung Health Monitor
+
+on:
+  workflow_dispatch:
+    inputs:
+      apk_url:
+        description: 'Direct download URL of Stock SHM APK'
+        required: true
+        default: 'https://github.com/Dante-Bro/Samsung-Health-Monitor-MOD/releases/download/v1.2.5.003/Phone.Samsung.Health.Monitor.apk'
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install Apktool & Uber-APK-Signer
+        run: |
+          sudo apt-get update && sudo apt-get install -y wget
+          wget -q https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar -O apktool.jar
+          wget -q https://github.com/patrickfav/uber-apk-signer/releases/download/v1.3.0/uber-apk-signer-1.3.0.jar -O uber-apk-signer.jar
+
+      - name: Download Original APK
+        run: |
+          wget -O original.apk "${{ github.event.inputs.apk_url }}"
+
+      - name: Decompile APK
+        run: |
+          java -jar apktool.jar d original.apk -o decompiled
+
+      - name: Apply Smali Patches (Bypass Checks)
+        run: |
+          python3 patch.py decompiled
+
+      - name: Rebuild APK
+        run: |
+          java -jar apktool.jar b decompiled -o patched_unsigned.apk
+
+      - name: Sign APK
+        run: |
+          java -jar uber-apk-signer.jar -a patched_unsigned.apk --allowResign -o output
+
+      - name: Upload Patched APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Patched-Samsung-Health-Monitor
+          path: output/*.apk
