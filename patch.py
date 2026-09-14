@@ -9,10 +9,11 @@ def patch_smali_methods(content):
 
     is_root_util = any(k in content for k in ['RootingCheckUtil', 'checkSuExists', 'checkRootingPackage'])
     is_validator = 'PackageValidator' in content
-    is_dialog = any(k in content for k in ['RootingDetectedDialog', 'showErrorDialog'])
-    is_restriction = any(k in content for k in ['RestrictionView', 'isSupportedCountry', 'isSupportCountry', 'common_restriction', 'CommonConstants$SupportedType', 'SHealthMonitorSetupActivity'])
+    is_root_dialog = 'RootingDetectedDialog' in content
+    is_setup = 'SHealthMonitorSetupActivity' in content
+    is_restriction = any(k in content for k in ['RestrictionView', 'isSupportedCountry', 'isSupportCountry', 'common_restriction', 'CommonConstants$SupportedType'])
 
-    if not (is_root_util or is_validator or is_dialog or is_restriction):
+    if not (is_root_util or is_validator or is_root_dialog or is_setup or is_restriction):
         return content
 
     methods = content.split('\n.method ')
@@ -22,6 +23,12 @@ def patch_smali_methods(content):
             res.append(m)
             continue
         header, body = m.split('\n', 1)
+        
+        # NEVER TOUCH CONSTRUCTORS
+        if '<init>' in header:
+            res.append(m)
+            continue
+
         regs = '    .registers 2'
         for line in body.splitlines():
             s = line.strip()
@@ -53,13 +60,17 @@ def patch_smali_methods(content):
         elif header.strip().endswith(')Lcom/samsung/android/shealthmonitor/util/CommonConstants$SupportedType;'):
             new_m = header + NL + regs + NL + '    sget-object v0, Lcom/samsung/android/shealthmonitor/util/CommonConstants$SupportedType;->d:Lcom/samsung/android/shealthmonitor/util/CommonConstants$SupportedType;' + NL + '    return-object v0' + NL + '.end method'
             res.append(new_m)
-        # 7. Disable dialog popups
-        elif is_dialog or 'showErrorDialog' in header or 'RootingDetectedDialog' in header:
-            if header.strip().endswith(')V'):
-                new_m = header + NL + regs + NL + '    return-void' + NL + '.end method'
-                res.append(new_m)
-            elif 'onCreateDialog' in header:
+        # 7. Disable showErrorDialog specifically in SetupActivity
+        elif is_setup and 'showErrorDialog(' in header:
+            new_m = header + NL + regs + NL + '    return-void' + NL + '.end method'
+            res.append(new_m)
+        # 8. Disable RootingDetectedDialog
+        elif is_root_dialog:
+            if 'onCreateDialog' in header:
                 new_m = header + NL + regs + NL + '    const/4 v0, 0x0' + NL + '    return-object v0' + NL + '.end method'
+                res.append(new_m)
+            elif 'show(' in header:
+                new_m = header + NL + regs + NL + '    return-void' + NL + '.end method'
                 res.append(new_m)
             else:
                 res.append(m)
