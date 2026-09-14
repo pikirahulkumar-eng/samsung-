@@ -1,4 +1,4 @@
-import os
+﻿import os
 import sys
 
 NL = chr(10)
@@ -9,8 +9,8 @@ def patch_smali_methods(content):
 
     is_root_util = any(k in content for k in ['RootingCheckUtil', 'checkSuExists', 'checkRootingPackage'])
     is_validator = 'PackageValidator' in content
-    is_dialog = 'RootingDetectedDialog' in content
-    is_restriction = any(k in content for k in ['RestrictionView', 'isSupportedCountry', 'isSupportCountry', 'common_restriction'])
+    is_dialog = any(k in content for k in ['RootingDetectedDialog', 'showErrorDialog'])
+    is_restriction = any(k in content for k in ['RestrictionView', 'isSupportedCountry', 'isSupportCountry', 'common_restriction', 'CommonConstants$SupportedType', 'SHealthMonitorSetupActivity'])
 
     if not (is_root_util or is_validator or is_dialog or is_restriction):
         return content
@@ -49,8 +49,12 @@ def patch_smali_methods(content):
         elif any(k in header for k in ['getNetworkCountryIso', 'getSimCountryIso', 'getCountryCode']) and header.strip().endswith(')Ljava/lang/String;'):
             new_m = header + NL + regs + NL + '    const-string v0, "US"' + NL + '    return-object v0' + NL + '.end method'
             res.append(new_m)
-        # 6. Disable dialog popups
-        elif is_dialog:
+        # 6. SupportedType methods: always return SUPPORTED (d)
+        elif header.strip().endswith(')Lcom/samsung/android/shealthmonitor/util/CommonConstants$SupportedType;'):
+            new_m = header + NL + regs + NL + '    sget-object v0, Lcom/samsung/android/shealthmonitor/util/CommonConstants$SupportedType;->d:Lcom/samsung/android/shealthmonitor/util/CommonConstants$SupportedType;' + NL + '    return-object v0' + NL + '.end method'
+            res.append(new_m)
+        # 7. Disable dialog popups
+        elif is_dialog or 'showErrorDialog' in header or 'RootingDetectedDialog' in header:
             if header.strip().endswith(')V'):
                 new_m = header + NL + regs + NL + '    return-void' + NL + '.end method'
                 res.append(new_m)
