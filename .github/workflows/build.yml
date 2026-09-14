@@ -27,12 +27,9 @@ jobs:
           wget -q https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar -O apktool.jar
           wget -q https://github.com/patrickfav/uber-apk-signer/releases/download/v1.3.0/uber-apk-signer-1.3.0.jar -O uber-apk-signer.jar
 
-      - name: Verify Original APK exists
+      - name: Download Stock APK from Release
         run: |
-          if [ ! -f "original.apk" ]; then
-            echo "ERROR: original.apk repository me nahi mila!"
-            exit 1
-          fi
+          wget -O original.apk https://github.com/pikirahulkumar-eng/samsung-/releases/download/v1.0.0/original.apk
 
       - name: Decompile APK
         run: |
