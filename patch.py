@@ -58,7 +58,7 @@ def patch_smali_methods(content):
             res.append(new_m)
         # 6. SupportedType methods: always return SUPPORTED (d)
         elif header.strip().endswith(')Lcom/samsung/android/shealthmonitor/util/CommonConstants$SupportedType;'):
-            new_m = header + NL + regs + NL + '    sget-object v0, Lcom/samsung/android/shealthmonitor/util/CommonConstants$SupportedType;->d:Lcom/samsung/android/shealthmonitor/util/CommonConstants$SupportedType;' + NL + '    return-object v0' + NL + '.end method'
+            new_m = header + NL + regs + NL + '    sget-object v0, Lcom/samsung/android/shealthmonitor/util/CommonConstants$SupportedType;->a:Lcom/samsung/android/shealthmonitor/util/CommonConstants$SupportedType;' + NL + '    return-object v0' + NL + '.end method'
             res.append(new_m)
         # 7. Disable showErrorDialog specifically in SetupActivity
         elif is_setup and 'showErrorDialog(' in header:
